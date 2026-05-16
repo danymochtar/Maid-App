@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyXSignature } from "@/lib/billplz";
 import { db } from "@/lib/db";
+import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  if (!env.BILLPLZ_X_SIGNATURE) {
+    return NextResponse.json(
+      { ok: false, error: "payments not configured" },
+      { status: 503 },
+    );
+  }
+
   const formData = await req.formData();
   const payload: Record<string, string> = {};
   for (const [k, v] of formData.entries()) payload[k] = String(v);

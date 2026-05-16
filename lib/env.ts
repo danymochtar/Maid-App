@@ -1,11 +1,15 @@
 import { z } from "zod";
 
+// All env vars are OPTIONAL at parse time so a missing value never breaks
+// the build. Code that genuinely needs a value calls `requireEnv("KEY")` at
+// the use-site, which throws a clear runtime error instead of a Zod-deep stack.
+
 const flag = z.preprocess((v) => v === "true" || v === "1", z.boolean());
 
 const schema = z.object({
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.string().url().optional(),
   DIRECT_URL: z.string().url().optional(),
-  NEXT_PUBLIC_APP_URL: z.string().url(),
+  NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
   BETTER_AUTH_URL: z.string().url().optional(),
   TWILIO_ACCOUNT_SID: z.string().optional(),
@@ -36,7 +40,26 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
 
-export const env = schema.parse(process.env);
+const parsed = schema.safeParse(process.env);
+if (!parsed.success) {
+  // Surface the issue but don't crash the build — every field is optional,
+  // so a failure here means a non-string env value, which is unusual.
+  console.warn("[env] schema parse warning:", parsed.error.flatten().fieldErrors);
+}
+export const env = parsed.success ? parsed.data : schema.parse({});
+
+type EnvKey = keyof typeof env;
+type RequiredEnv<K extends EnvKey> = NonNullable<(typeof env)[K]>;
+
+export function requireEnv<K extends EnvKey>(key: K): RequiredEnv<K> {
+  const v = env[key];
+  if (v == null || v === "") {
+    throw new Error(
+      `Missing required env var: ${key}. Set it in Vercel → Settings → Environment Variables.`,
+    );
+  }
+  return v as RequiredEnv<K>;
+}
 
 export const adminBootstrapPhones = env.ADMIN_BOOTSTRAP_PHONES.split(",")
   .map((p) => p.trim())

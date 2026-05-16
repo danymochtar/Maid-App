@@ -1,11 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { env } from "./env";
+import { env, requireEnv } from "./env";
 
 const BASE = env.BILLPLZ_API_BASE;
 
 function authHeader() {
-  if (!env.BILLPLZ_API_KEY) throw new Error("BILLPLZ_API_KEY not set");
-  const token = Buffer.from(`${env.BILLPLZ_API_KEY}:`).toString("base64");
+  const key = requireEnv("BILLPLZ_API_KEY");
+  const token = Buffer.from(`${key}:`).toString("base64");
   return { Authorization: `Basic ${token}` };
 }
 
@@ -22,9 +22,9 @@ export type CreateBillInput = {
 };
 
 export async function createBill(input: CreateBillInput) {
-  if (!env.BILLPLZ_COLLECTION_ID) throw new Error("BILLPLZ_COLLECTION_ID not set");
+  const collectionId = requireEnv("BILLPLZ_COLLECTION_ID");
   const body = new URLSearchParams({
-    collection_id: env.BILLPLZ_COLLECTION_ID,
+    collection_id: collectionId,
     description: input.description,
     name: input.name,
     amount: String(input.amountCents),
@@ -54,13 +54,13 @@ export async function getBill(billId: string) {
 // X-Signature for webhook: HMAC-SHA256 of sorted key-value pairs separated by `|`.
 // See https://www.billplz.com/api#callback-xsignature
 export function verifyXSignature(payload: Record<string, string>, signature: string): boolean {
-  if (!env.BILLPLZ_X_SIGNATURE) throw new Error("BILLPLZ_X_SIGNATURE not set");
+  const secret = requireEnv("BILLPLZ_X_SIGNATURE");
   const source = Object.keys(payload)
     .filter((k) => k !== "x_signature")
     .sort()
     .map((k) => `${k}${payload[k]}`)
     .join("|");
-  const expected = createHmac("sha256", env.BILLPLZ_X_SIGNATURE).update(source).digest("hex");
+  const expected = createHmac("sha256", secret).update(source).digest("hex");
   try {
     return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
   } catch {
