@@ -1,0 +1,447 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum Role {
+  CLIENT
+  HELPER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  PROBATION
+  SUSPENDED
+  BANNED
+}
+
+enum VerificationTier {
+  TIER_0_PHONE
+  TIER_1_ID_SELFIE
+  TIER_2_BG_CHECK
+}
+
+enum ServiceCategory {
+  HOME_CLEANING
+  HOME_COOKING
+  HOME_LAUNDRY
+  HOME_ORGANIZING
+  CARE_CHILD
+  CARE_ELDER
+  CARE_PET
+  CARE_PLANT
+  ERRANDS_GROCERY
+  ERRANDS_PHARMACY
+  ERRANDS_PARCEL
+  ERRANDS_QUEUE
+  PERSONAL_ASSISTANT
+  EVENT_HELP
+  TUTORING
+  HANDY_SMALL
+  DRIVER_ONDEMAND
+  BEAUTY_WELLNESS
+  OTHER
+}
+
+enum PricingMode {
+  HOURLY
+  PER_JOB
+}
+
+enum SwipeDirection {
+  LEFT
+  RIGHT
+  SUPER
+}
+
+enum MatchStatus {
+  PENDING
+  MATCHED
+  EXPIRED
+  UNMATCHED
+}
+
+enum BookingStatus {
+  REQUESTED
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  DISPUTED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+  VOIDED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED_CLIENT
+  RESOLVED_HELPER
+  SPLIT
+}
+
+// ============================================================
+// Core user models
+// ============================================================
+
+model User {
+  id              String           @id @default(cuid())
+  phoneE164       String           @unique
+  email           String?          @unique
+  role            Role
+  verifTier       VerificationTier @default(TIER_0_PHONE)
+  status          UserStatus       @default(PROBATION)
+  signupIp        String?
+  signupDeviceId  String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  helperProfile   HelperProfile?
+  clientProfile   ClientProfile?
+
+  swipesMade      Swipe[]          @relation("swiper")
+  swipesAsTargetClient Swipe[]     @relation("targetClient")
+
+  matchesAsClient Match[]          @relation("matchClient")
+  matchesAsHelper Match[]          @relation("matchHelper")
+
+  bookingsAsClient Booking[]       @relation("bookingClient")
+  bookingsAsHelper Booking[]       @relation("bookingHelper")
+
+  messagesSent    Message[]        @relation("sender")
+  reviewsAuthored Review[]         @relation("reviewAuthor")
+  reviewsReceived Review[]         @relation("reviewSubject")
+
+  devices         DeviceFingerprint[]
+  otpAttempts    OTPAttempt[]
+
+  reportsFiled    Report[]         @relation("reporter")
+  reportsAgainst  Report[]         @relation("reportedUser")
+
+  blocksMade      BlockList[]      @relation("blocker")
+  blocksAgainst   BlockList[]      @relation("blocked")
+
+  auditLogs       AuditLog[]
+
+  @@index([status])
+}
+
+model HelperProfile {
+  userId            String           @id
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName       String
+  tagline           String?
+  bio               String?
+  photoUrls         String[]
+  idDocBlobKey      String?
+  selfieBlobKey     String?
+  serviceAreas      String[]
+  baseLat           Float?
+  baseLng           Float?
+  radiusKm          Int              @default(15)
+  availability      Json?
+  ratingAvg         Float            @default(0)
+  ratingCount       Int              @default(0)
+  completedJobs     Int              @default(0)
+  acceptanceRate    Float            @default(0)
+  responseMedianMins Int?
+  probationUntil    DateTime?
+  payoutMethod      Json?
+  listings          HelperListing[]
+}
+
+model HelperListing {
+  id              String          @id @default(cuid())
+  helperId        String
+  helper          HelperProfile   @relation(fields: [helperId], references: [userId], onDelete: Cascade)
+  category        ServiceCategory
+  pricingMode     PricingMode
+  rateMyrSen      Int
+  minHours        Int?
+  jobDurationMins Int?
+  skills          String[]
+  requirements    String?
+  active          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  swipes          Swipe[]
+  matches         Match[]
+
+  @@index([category, active])
+  @@index([helperId])
+}
+
+model ClientProfile {
+  userId           String     @id
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName         String
+  addresses        Address[]
+  defaultAddressId String?
+}
+
+model Address {
+  id        String        @id @default(cuid())
+  clientId  String
+  client    ClientProfile @relation(fields: [clientId], references: [userId], onDelete: Cascade)
+  line1     String
+  line2     String?
+  city      String
+  state     String
+  postcode  String
+  lat       Float
+  lng       Float
+  notes     String?
+  createdAt DateTime      @default(now())
+  bookings  Booking[]
+
+  @@index([clientId])
+}
+
+// ============================================================
+// Discovery: Swipe + Match
+// ============================================================
+
+model Swipe {
+  id              String         @id @default(cuid())
+  swiperId        String
+  swiper          User           @relation("swiper", fields: [swiperId], references: [id], onDelete: Cascade)
+  swiperRole      Role
+  direction       SwipeDirection
+  targetListingId String?
+  targetListing   HelperListing? @relation(fields: [targetListingId], references: [id], onDelete: Cascade)
+  targetClientId  String?
+  targetClient    User?          @relation("targetClient", fields: [targetClientId], references: [id], onDelete: Cascade)
+  searchCtx       Json?
+  note            String?
+  createdAt       DateTime       @default(now())
+
+  @@unique([swiperId, targetListingId])
+  @@unique([swiperId, targetClientId])
+  @@index([swiperId, createdAt])
+  @@index([targetListingId, direction])
+}
+
+model Match {
+  id            String        @id @default(cuid())
+  clientId      String
+  client        User          @relation("matchClient", fields: [clientId], references: [id], onDelete: Cascade)
+  helperId      String
+  helper        User          @relation("matchHelper", fields: [helperId], references: [id], onDelete: Cascade)
+  listingId     String
+  listing       HelperListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  status        MatchStatus   @default(PENDING)
+  createdAt     DateTime      @default(now())
+  matchedAt     DateTime?
+  expiresAt     DateTime
+  messages      Message[]
+  bookings      Booking[]
+
+  @@unique([clientId, helperId, listingId])
+  @@index([clientId, status])
+  @@index([helperId, status])
+}
+
+// ============================================================
+// Booking + Payment
+// ============================================================
+
+model Booking {
+  id               String         @id @default(cuid())
+  matchId          String
+  match            Match          @relation(fields: [matchId], references: [id])
+  clientId         String
+  client           User           @relation("bookingClient", fields: [clientId], references: [id])
+  helperId         String
+  helper           User           @relation("bookingHelper", fields: [helperId], references: [id])
+  listingId        String
+  category         ServiceCategory
+  addressId        String
+  address          Address        @relation(fields: [addressId], references: [id])
+  scheduledStart   DateTime
+  durationHours    Float?
+  fixedJob         Boolean        @default(false)
+  pricingMode      PricingMode
+  rateMyrSenSnap   Int
+  estTotalMyrSen   Int
+  actualTotalMyrSen Int?
+  status           BookingStatus  @default(REQUESTED)
+  checkInAt        DateTime?
+  checkInPhotoKey  String?
+  checkInLat       Float?
+  checkInLng       Float?
+  checkOutAt       DateTime?
+  cancellationReason String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  payment          PaymentIntent?
+  dispute          Dispute?
+  reviews          Review[]
+
+  @@index([helperId, scheduledStart])
+  @@index([clientId, status])
+  @@index([status])
+}
+
+model PaymentIntent {
+  id              String        @id @default(cuid())
+  bookingId       String        @unique
+  booking         Booking       @relation(fields: [bookingId], references: [id])
+  provider        String        @default("BILLPLZ")
+  providerBillId  String?       @unique
+  amountMyrSen    Int
+  status          PaymentStatus @default(PENDING)
+  authorizedAt    DateTime?
+  capturedAt      DateTime?
+  refundedAt      DateTime?
+  payoutHoldUntil DateTime?
+  payoutSentAt    DateTime?
+  rawWebhook      Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+// ============================================================
+// Chat + reviews + disputes
+// ============================================================
+
+model Message {
+  id               String   @id @default(cuid())
+  matchId          String
+  match            Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  senderId         String
+  sender           User     @relation("sender", fields: [senderId], references: [id])
+  bodyRaw          String
+  bodyRedacted     String
+  redactedPiiTypes String[]
+  createdAt        DateTime @default(now())
+
+  @@index([matchId, createdAt])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  authorId  String
+  author    User     @relation("reviewAuthor", fields: [authorId], references: [id])
+  subjectId String
+  subject   User     @relation("reviewSubject", fields: [subjectId], references: [id])
+  stars     Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@unique([bookingId, authorId])
+  @@index([subjectId])
+}
+
+model Dispute {
+  id           String        @id @default(cuid())
+  bookingId    String        @unique
+  booking      Booking       @relation(fields: [bookingId], references: [id])
+  openedById   String
+  reason       String
+  evidenceKeys String[]
+  status       DisputeStatus @default(OPEN)
+  resolution   String?
+  adminNote    String?
+  createdAt    DateTime      @default(now())
+  resolvedAt   DateTime?
+}
+
+// ============================================================
+// Trust + safety
+// ============================================================
+
+model DeviceFingerprint {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  visitorId String
+  ip        String
+  userAgent String
+  riskScore Int      @default(0)
+  firstSeen DateTime @default(now())
+  lastSeen  DateTime @updatedAt
+
+  @@index([visitorId])
+  @@index([ip])
+}
+
+model OTPAttempt {
+  id        String   @id @default(cuid())
+  phoneE164 String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  ip        String
+  visitorId String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([phoneE164, createdAt])
+  @@index([ip, createdAt])
+}
+
+model Report {
+  id             String   @id @default(cuid())
+  reporterId     String
+  reporter       User     @relation("reporter", fields: [reporterId], references: [id])
+  reportedUserId String
+  reportedUser   User     @relation("reportedUser", fields: [reportedUserId], references: [id])
+  bookingId      String?
+  category       String
+  detail         String
+  status         String   @default("OPEN")
+  createdAt      DateTime @default(now())
+
+  @@index([reportedUserId, status])
+}
+
+model BlockList {
+  id        String   @id @default(cuid())
+  blockerId String
+  blocker   User     @relation("blocker", fields: [blockerId], references: [id])
+  blockedId String
+  blocked   User     @relation("blocked", fields: [blockedId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  action    String
+  target    String?
+  meta      Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+}
+
+// ============================================================
+// Better Auth (managed by better-auth CLI; placeholder so prisma generate works
+// before first `better-auth migrate`. Real schema added once auth lib is wired.)
+// ============================================================
+// Session, Account, Verification models are appended by Better Auth's generator.
