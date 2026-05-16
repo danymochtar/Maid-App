@@ -59,23 +59,31 @@ export type SessionUser = {
 export async function getSessionUser(): Promise<SessionUser | null> {
   const id = await getSessionUserId();
   if (!id) return null;
-  const u = await db.user.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      role: true,
-      email: true,
-      helperProfile: { select: { displayName: true } },
-      clientProfile: { select: { fullName: true } },
-    },
-  });
-  if (!u) return null;
-  return {
-    id: u.id,
-    role: u.role,
-    email: u.email,
-    displayName: u.helperProfile?.displayName ?? u.clientProfile?.fullName ?? "User",
-  };
+  try {
+    const u = await db.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        role: true,
+        email: true,
+        helperProfile: { select: { displayName: true } },
+        clientProfile: { select: { fullName: true } },
+      },
+    });
+    if (!u) return null;
+    return {
+      id: u.id,
+      role: u.role,
+      email: u.email,
+      displayName: u.helperProfile?.displayName ?? u.clientProfile?.fullName ?? "User",
+    };
+  } catch (e) {
+    // DB unreachable (e.g., DATABASE_URL not set in this env). Treat as
+    // logged-out so the page can still render — protected pages will
+    // redirect to /login, and /login itself doesn't need this lookup.
+    console.error("[session] DB lookup failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
 }
 
 export async function requireSessionUser(): Promise<SessionUser> {
