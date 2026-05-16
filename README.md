@@ -74,10 +74,58 @@ See the plan's "Implementation Order" — remaining: full Better Auth wiring, he
 
 ## Deploy to Vercel
 
-1. Push branch → import repo on Vercel
-2. Add the **Prisma Postgres** marketplace integration (auto-injects `DATABASE_URL` + `DIRECT_URL`)
-3. Add the remaining env vars from `.env.example`
-4. Region is pinned to `sin1` via `vercel.json`
+### 1. Pick a serverless-friendly Postgres
+
+**Do not** use a self-hosted Postgres with a public IP — Vercel's build and
+function IPs are dynamic so you can't allowlist them, and serverless functions
+spin up unbounded concurrent connections that crush a single instance.
+Use one of:
+
+- **Prisma Postgres** (Vercel Marketplace, one-click integration — recommended)
+- **Neon** (serverless-native, generous free tier, has connection pooling)
+- **Supabase** Postgres (also fine; ignore their auth since we use Better Auth)
+
+The marketplace integration auto-injects `DATABASE_URL` (pooled) and
+`DIRECT_URL` (direct, for migrations).
+
+### 2. Import the repo
+
+Vercel → New Project → import this repo on branch
+`claude/maid-app-mvp-research-Fque4`. Vercel detects Next.js automatically.
+
+### 3. Add env vars
+
+From the **Vercel UI** (Project → Settings → Environment Variables) — never
+commit secrets. Required:
+
+- `DATABASE_URL`, `DIRECT_URL` (from your DB provider — auto-set if you used
+  the Prisma Postgres marketplace integration)
+- `BETTER_AUTH_SECRET` (run `openssl rand -hex 32`)
+- `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_URL` — your production domain
+
+Optional, only when you ship the feature:
+- `TWILIO_*` for real OTP (leave unset to use `DEV_OTP_BYPASS=1` in preview)
+- `BILLPLZ_*` for payments
+- `PUSHER_*` for chat
+- `UPSTASH_REDIS_*` for distributed rate limits
+
+### 4. Run migrations (separate from build)
+
+Migrations are intentionally **not** in the build command — they're a
+production-state change and shouldn't silently run on every deploy.
+
+```bash
+# from your local machine, one-time setup
+vercel link
+vercel env pull .env.production.local
+
+# then any time the schema changes:
+DOTENV_CONFIG_PATH=.env.production.local npx -y dotenv-cli -- npx prisma migrate deploy
+```
+
+Or run migrations from your laptop against the production DB URL directly,
+once, then deploy. Build region is pinned to `sin1` (Singapore) via
+`vercel.json` for low MY latency.
 
 ## Differentiation vs Maideasy
 
