@@ -18,6 +18,10 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
   },
+  // Ensure Prisma migration SQL ships in the /setup serverless function bundle.
+  outputFileTracingIncludes: {
+    "/setup": ["./prisma/migrations/**/*.sql"],
+  },
 };
 
 export default withSerwist(nextConfig);

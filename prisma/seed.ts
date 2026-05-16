@@ -1,8 +1,7 @@
-import { PrismaClient, ServiceCategory } from "@prisma/client";
+import type { PrismaClient, ServiceCategory } from "@prisma/client";
+import { PrismaClient as PrismaClientCtor } from "@prisma/client";
 import { hashPassword } from "../lib/passwords";
 import { TEST_CLIENT_ID, TEST_CLIENT_EMAIL, TEST_CLIENT_PASSWORD } from "../lib/dev-session";
-
-const db = new PrismaClient();
 
 // 10 helpers spanning all MVP-enabled categories with distinct personalities,
 // pricing modes, ratings, and skills so the swipe stack has visible variety.
@@ -148,8 +147,10 @@ const HELPERS = [
   },
 ] as const;
 
-async function main() {
-  console.log("⏳ Cleaning slate...");
+export type SeedLog = (msg: string) => void;
+
+export async function seedDatabase(db: PrismaClient, log: SeedLog = console.log) {
+  log("⏳ Cleaning slate...");
   await db.message.deleteMany();
   await db.review.deleteMany();
   await db.dispute.deleteMany();
@@ -168,7 +169,7 @@ async function main() {
   await db.oTPAttempt.deleteMany();
   await db.user.deleteMany();
 
-  console.log("⏳ Seeding admin...");
+  log("⏳ Seeding admin...");
   const admin = await db.user.create({
     data: {
       phoneE164: "+60111000001",
@@ -180,7 +181,7 @@ async function main() {
     },
   });
 
-  console.log(`⏳ Seeding test client (${TEST_CLIENT_EMAIL} / ${TEST_CLIENT_PASSWORD})...`);
+  log(`⏳ Seeding test client (${TEST_CLIENT_EMAIL} / ${TEST_CLIENT_PASSWORD})...`);
   await db.user.create({
     data: {
       id: TEST_CLIENT_ID,
@@ -210,7 +211,7 @@ async function main() {
     },
   });
 
-  console.log("⏳ Seeding 10 helpers...");
+  log("⏳ Seeding 10 helpers...");
   for (const [i, h] of HELPERS.entries()) {
     const u = await db.user.create({
       data: {
@@ -261,17 +262,38 @@ async function main() {
     db.helperListing.count(),
     db.user.count({ where: { role: "CLIENT" } }),
   ]);
-  console.log(
+  log(
     `✅ Seed done. Helpers: ${stats[0]}, Listings: ${stats[1]}, Clients: ${stats[2]}, Admin: ${admin.id}`,
   );
-  console.log(`\n👉 Test customer login: ${TEST_CLIENT_EMAIL} / ${TEST_CLIENT_PASSWORD}`);
-  console.log(`👉 Helper logins (password: ${HELPER_PASSWORD}):`);
-  for (const h of HELPERS) console.log(`     ${h.email}  (${h.name})`);
+  log(`\n👉 Test customer login: ${TEST_CLIENT_EMAIL} / ${TEST_CLIENT_PASSWORD}`);
+  log(`👉 Helper logins (password: ${HELPER_PASSWORD}):`);
+  for (const h of HELPERS) log(`     ${h.email}  (${h.name})`);
+
+  return {
+    helpers: HELPERS.length,
+    listings: stats[1],
+    clients: stats[2],
+    admin: admin.id,
+  };
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => db.$disconnect());
+// CLI entry — only when invoked directly via `tsx prisma/seed.ts`.
+const isCli = typeof require !== "undefined"
+  ? require.main === module
+  : (() => {
+      try {
+        return import.meta.url === `file://${process.argv[1]}`;
+      } catch {
+        return false;
+      }
+    })();
+
+if (isCli) {
+  const db = new PrismaClientCtor();
+  seedDatabase(db)
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(() => db.$disconnect());
+}
