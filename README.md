@@ -32,13 +32,29 @@ cp .env.example .env
 
 # 3. database
 npx prisma migrate dev --name init
-npm run db:seed       # 1 admin, 1 client, 8 helpers across categories
+npm run db:seed       # 1 admin, 1 test client, 10 helpers across categories
 
 # 4. run
 npm run dev           # http://localhost:3000
 ```
 
+**Test customer**: `test@maidapp.ai` / `test123` (id `test-client-fixed-id`).
+The current dev build runs every server action as this user — full Better Auth
+session lookup lands in implementation step 3.
+
 Open `/` then tap **Find a helper** to see the swipe stack.
+
+### End-to-end simulation
+
+```bash
+npm run db:simulate
+```
+
+Walks the test customer through 35 checks across every implemented feature —
+login (scrypt), discover stack, feature-flag gating, filters, swipe LRS, swipe
+idempotency, pass-hide, mutual-match unlock, chat PII redaction, booking
+gated on MATCHED, Billplz X-Signature verification (good + forged + truncated),
+rate-limit cap at 20 right-swipes/day, unmatch, block.
 
 ## What's wired up (this commit)
 

@@ -6,7 +6,7 @@ import { nextStackPage } from "@/lib/actions/discover";
 
 export const dynamic = "force-dynamic";
 
-const DEMO_CLIENT_ID = "demo-client";
+import { TEST_CLIENT_ID } from "@/lib/dev-session";
 
 export default async function DiscoverPage({
   searchParams,
@@ -20,7 +20,7 @@ export default async function DiscoverPage({
 
   let initialCards: Awaited<ReturnType<typeof nextStackPage>> = [];
   try {
-    initialCards = await nextStackPage(DEMO_CLIENT_ID, {
+    initialCards = await nextStackPage(TEST_CLIENT_ID, {
       category: initialCategory,
       postcode: initialPostcode,
     });

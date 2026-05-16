@@ -107,6 +107,7 @@ model User {
   id              String           @id @default(cuid())
   phoneE164       String           @unique
   email           String?          @unique
+  passwordHash    String?
   role            Role
   verifTier       VerificationTier @default(TIER_0_PHONE)
   status          UserStatus       @default(PROBATION)
