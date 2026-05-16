@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { CATEGORY_META } from "@/lib/categories";
 import { db } from "@/lib/db";
-import { getSessionUser } from "@/lib/session";
+import { requireSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -18,15 +17,13 @@ const STATUS_COLOR: Record<string, string> = {
   REFUNDED: "bg-zinc-100 text-zinc-600",
 };
 
-export default async function BookingsPage() {
-  const me = await getSessionUser();
-  if (!me) redirect("/login");
+export default async function HelperJobs() {
+  const me = await requireSessionUser();
 
-  const bookings = await db.booking.findMany({
-    where: me.role === "HELPER" ? { helperId: me.id } : { clientId: me.id },
+  const jobs = await db.booking.findMany({
+    where: { helperId: me.id },
     orderBy: { scheduledStart: "desc" },
     include: {
-      helper: { select: { helperProfile: { select: { displayName: true } } } },
       client: { select: { clientProfile: { select: { fullName: true } } } },
       address: true,
     },
@@ -35,43 +32,38 @@ export default async function BookingsPage() {
 
   return (
     <main className="mx-auto max-w-md p-4">
-      <h1 className="text-2xl font-bold">Bookings</h1>
+      <h1 className="text-2xl font-bold">Jobs</h1>
       <p className="mt-1 text-sm text-zinc-500">
-        {bookings.length === 0
-          ? "No bookings yet. Confirm a match and book a time."
-          : `${bookings.length} total`}
+        {jobs.length === 0 ? "No jobs yet — accept a match to receive bookings." : `${jobs.length} total`}
       </p>
 
       <ul className="mt-4 flex flex-col gap-2">
-        {bookings.map((b) => {
+        {jobs.map((b) => {
           const meta = CATEGORY_META[b.category];
-          const other = me.role === "HELPER"
-            ? b.client.clientProfile?.fullName ?? "Client"
-            : b.helper.helperProfile?.displayName ?? "Helper";
           return (
             <li key={b.id}>
               <Link
                 href={`/bookings/${b.id}`}
-                className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-3 transition hover:border-brand-300"
+                className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-3"
               >
                 <div className="grid size-10 place-items-center rounded-full bg-brand-100 text-xl">
                   {meta.emoji}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate font-semibold">{other}</p>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLOR[b.status]}`}
-                    >
+                    <p className="truncate font-semibold">
+                      {b.client.clientProfile?.fullName ?? "Client"}
+                    </p>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLOR[b.status]}`}>
                       {b.status}
                     </span>
                   </div>
                   <p className="text-xs text-zinc-500">{meta.label}</p>
                   <p className="text-xs text-zinc-500">
-                    {b.scheduledStart.toLocaleString("en-MY", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
+                    {b.scheduledStart.toLocaleString("en-MY", { dateStyle: "medium", timeStyle: "short" })}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    {b.address.line1}, {b.address.postcode} {b.address.city}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-brand-700">
                     RM{(b.estTotalMyrSen / 100).toFixed(2)}

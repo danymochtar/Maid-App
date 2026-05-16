@@ -14,6 +14,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:simulate": "tsx prisma/simulate.ts",
+    "db:walkthrough": "tsx prisma/walkthrough.ts",
     "db:studio": "prisma studio",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -1,18 +1,21 @@
 import { ServiceCategory } from "@prisma/client";
-import { DiscoverClient } from "./discover-client";
+import { redirect } from "next/navigation";
 import { ALL_CATEGORIES } from "@/lib/categories";
-import { isCategoryEnabled } from "@/lib/env";
 import { nextStackPage } from "@/lib/actions/discover";
+import { isCategoryEnabled } from "@/lib/env";
+import { getSessionUserId } from "@/lib/session";
+import { DiscoverClient } from "./discover-client";
 
 export const dynamic = "force-dynamic";
-
-import { TEST_CLIENT_ID } from "@/lib/dev-session";
 
 export default async function DiscoverPage({
   searchParams,
 }: {
   searchParams: Promise<{ category?: string; postcode?: string }>;
 }) {
+  const uid = await getSessionUserId();
+  if (!uid) redirect("/login");
+
   const sp = await searchParams;
   const initialCategory = (sp.category as ServiceCategory) ?? "HOME_CLEANING";
   const initialPostcode = sp.postcode ?? "50000";
@@ -20,7 +23,7 @@ export default async function DiscoverPage({
 
   let initialCards: Awaited<ReturnType<typeof nextStackPage>> = [];
   try {
-    initialCards = await nextStackPage(TEST_CLIENT_ID, {
+    initialCards = await nextStackPage(uid, {
       category: initialCategory,
       postcode: initialPostcode,
     });

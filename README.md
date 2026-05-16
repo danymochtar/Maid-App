@@ -44,17 +44,39 @@ session lookup lands in implementation step 3.
 
 Open `/` then tap **Find a helper** to see the swipe stack.
 
-### End-to-end simulation
+### Test accounts (seeded)
+
+**Customer** — `test@maidapp.ai` / `test123` (postcode 50000, KL)
+
+**Helpers** (password `helper123`):
+`aishah@maidapp.ai` · `hafiz@maidapp.ai` · `meiling@maidapp.ai` · `priya@maidapp.ai` ·
+`daniel@maidapp.ai` · `siti@maidapp.ai` · `ravi@maidapp.ai` · `nurul@maidapp.ai` ·
+`kumar@maidapp.ai` · `farah@maidapp.ai`
+
+**Admin** — `admin@maidapp.ai` / `admin123`
+
+### Demo the full flow (5 minutes)
+
+1. Visit `/login` → log in as `test@maidapp.ai`
+2. Land on `/discover` → swipe right on Aishah
+3. Sign out → log in as `aishah@maidapp.ai` → land on `/helper/dashboard`
+4. Tap **Inbox** → swipe right on Test Customer → "It's a match!"
+5. Tap **Matches** → open thread → send "call me at 012-3456789" → see PII redaction
+6. Sign back in as test customer → `/matches` → tap **Book** → pick date/duration → confirm
+7. Sign in as Aishah → `/helper/jobs` → tap booking → **Accept job** → **Check in** → **In progress** → **Complete**
+8. Sign in as client → `/bookings` → tap booking → **Simulate payment success** → **Confirm & release payout** (sets 48h payout hold)
+
+### Automated tests
 
 ```bash
-npm run db:simulate
+npm run db:simulate    # 35 unit checks against the DB directly
+npm run db:walkthrough # 40 live-HTTP checks against a running dev server
 ```
 
-Walks the test customer through 35 checks across every implemented feature —
-login (scrypt), discover stack, feature-flag gating, filters, swipe LRS, swipe
-idempotency, pass-hide, mutual-match unlock, chat PII redaction, booking
-gated on MATCHED, Billplz X-Signature verification (good + forged + truncated),
-rate-limit cap at 20 right-swipes/day, unmatch, block.
+The HTTP walkthrough verifies login redirects, discover renders, swipe → match,
+helper inbox, chat PII redaction in the rendered HTML, booking creation,
+helper dashboard, and auth-aware home — all by signing a session cookie with
+the same HMAC the app uses.
 
 ## What's wired up (this commit)
 

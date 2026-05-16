@@ -1,16 +1,24 @@
 "use server";
 
 import { SwipeDirection } from "@prisma/client";
+import { redirect } from "next/navigation";
+import type { StackFilters } from "@/components/swipe/filters-drawer";
 import { nextStackPage } from "@/lib/actions/discover";
 import { swipeListing } from "@/lib/actions/swipe";
-import type { StackFilters } from "@/components/swipe/filters-drawer";
+import { getSessionUserId } from "@/lib/session";
 
-import { TEST_CLIENT_ID } from "@/lib/dev-session";
+async function requireUid(): Promise<string> {
+  const id = await getSessionUserId();
+  if (!id) redirect("/login");
+  return id;
+}
 
 export async function loadMoreAction(filters: StackFilters, cursor: string | null) {
-  return nextStackPage(TEST_CLIENT_ID, { ...filters, cursor: cursor ?? undefined });
+  const uid = await requireUid();
+  return nextStackPage(uid, { ...filters, cursor: cursor ?? undefined });
 }
 
 export async function swipeAction(listingId: string, direction: SwipeDirection) {
-  return swipeListing(TEST_CLIENT_ID, { targetListingId: listingId, direction });
+  const uid = await requireUid();
+  return swipeListing(uid, { targetListingId: listingId, direction });
 }

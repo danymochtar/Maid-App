@@ -6,9 +6,12 @@ const db = new PrismaClient();
 
 // 10 helpers spanning all MVP-enabled categories with distinct personalities,
 // pricing modes, ratings, and skills so the swipe stack has visible variety.
+const HELPER_PASSWORD = "helper123";
+
 const HELPERS = [
   {
     phone: "+60112000001",
+    email: "aishah@maidapp.ai",
     name: "Aishah",
     tagline: "Detail-oriented condo cleaner, 5+ years in KL",
     bio: "Verified pembantu. Bring my own eco-friendly supplies. Pet-friendly homes welcome.",
@@ -22,6 +25,7 @@ const HELPERS = [
   },
   {
     phone: "+60112000002",
+    email: "hafiz@maidapp.ai",
     name: "Hafiz",
     tagline: "Errand expert — your time is mine",
     bio: "Have car + motorbike. Cover KL & Selangor. Fast, reliable, photo proof for every parcel.",
@@ -36,6 +40,7 @@ const HELPERS = [
   },
   {
     phone: "+60112000003",
+    email: "meiling@maidapp.ai",
     name: "Mei Ling",
     tagline: "Home cook — Cantonese & Nyonya specialty",
     bio: "Trained at Berjaya UCSI. Cook 4-course meals on-site. Halal-aware kitchen handling.",
@@ -48,6 +53,7 @@ const HELPERS = [
   },
   {
     phone: "+60112000004",
+    email: "priya@maidapp.ai",
     name: "Priya",
     tagline: "Pet sitter + dog walker, vet-tech trained",
     bio: "Worked at PetWorld 3 years. Comfortable with dogs (any size), cats, rabbits, hamsters.",
@@ -61,6 +67,7 @@ const HELPERS = [
   },
   {
     phone: "+60112000005",
+    email: "daniel@maidapp.ai",
     name: "Daniel",
     tagline: "SPM Maths & Add Maths tutor, 8 years",
     bio: "Engineering grad UTM. SPM A+ Maths. Teach in BM or EN. Past students up 2 grades on avg.",
@@ -73,6 +80,7 @@ const HELPERS = [
   },
   {
     phone: "+60112000006",
+    email: "siti@maidapp.ai",
     name: "Siti",
     tagline: "Personal assistant — admin, scheduling, errands",
     bio: "Ex-administrative officer. Manage your inbox, schedule calls, draft emails (BM/EN/Mandarin).",
@@ -86,6 +94,7 @@ const HELPERS = [
   },
   {
     phone: "+60112000007",
+    email: "ravi@maidapp.ai",
     name: "Ravi",
     tagline: "Handy fixes & IKEA assembly — tools included",
     bio: "Carpenter background. Hang shelves, mount TVs, assemble any IKEA flatpack. Insured.",
@@ -98,6 +107,7 @@ const HELPERS = [
   },
   {
     phone: "+60112000008",
+    email: "nurul@maidapp.ai",
     name: "Nurul",
     tagline: "Home organizer — Marie-Kondo certified",
     bio: "Categorize, declutter, label. Wardrobe, kitchen, pantry, garage. Photos before/after.",
@@ -110,6 +120,7 @@ const HELPERS = [
   },
   {
     phone: "+60112000009",
+    email: "kumar@maidapp.ai",
     name: "Kumar",
     tagline: "Queue stand-in & document pickup",
     bio: "Stand in line at JPJ, JPN, Imigresen, banks. Send live photo updates while queuing.",
@@ -122,6 +133,7 @@ const HELPERS = [
   },
   {
     phone: "+60112000010",
+    email: "farah@maidapp.ai",
     name: "Farah",
     tagline: "Multi-tasker — cleaning, laundry, cooking combo",
     bio: "Save by booking me for the day. Light meal prep + cleaning + laundry in one visit.",
@@ -203,6 +215,8 @@ async function main() {
     const u = await db.user.create({
       data: {
         phoneE164: h.phone,
+        email: h.email,
+        passwordHash: hashPassword(HELPER_PASSWORD),
         role: "HELPER",
         status: "ACTIVE",
         verifTier: "TIER_0_PHONE",
@@ -250,7 +264,9 @@ async function main() {
   console.log(
     `✅ Seed done. Helpers: ${stats[0]}, Listings: ${stats[1]}, Clients: ${stats[2]}, Admin: ${admin.id}`,
   );
-  console.log(`👉 Login: ${TEST_CLIENT_EMAIL} / ${TEST_CLIENT_PASSWORD}`);
+  console.log(`\n👉 Test customer login: ${TEST_CLIENT_EMAIL} / ${TEST_CLIENT_PASSWORD}`);
+  console.log(`👉 Helper logins (password: ${HELPER_PASSWORD}):`);
+  for (const h of HELPERS) console.log(`     ${h.email}  (${h.name})`);
 }
 
 main()
