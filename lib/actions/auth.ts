@@ -22,22 +22,32 @@ export async function loginAction(_state: AuthState, formData: FormData): Promis
   });
   if (!parsed.success) return { error: "Email and password required" };
 
-  const rl = await rateLimit(`login:${parsed.data.email}`, 10, 300);
-  if (!rl.allowed) return { error: "Too many attempts. Try again in 5 minutes." };
+  try {
+    const rl = await rateLimit(`login:${parsed.data.email}`, 10, 300);
+    if (!rl.allowed) return { error: "Too many attempts. Try again in 5 minutes." };
 
-  const user = await db.user.findUnique({
-    where: { email: parsed.data.email },
-    select: { id: true, passwordHash: true, status: true, role: true },
-  });
-  if (!user || !user.passwordHash || !verifyPassword(parsed.data.password, user.passwordHash)) {
-    return { error: "Invalid email or password" };
-  }
-  if (user.status === "BANNED" || user.status === "SUSPENDED") {
-    return { error: "Account locked. Contact support." };
-  }
+    const user = await db.user.findUnique({
+      where: { email: parsed.data.email },
+      select: { id: true, passwordHash: true, status: true, role: true },
+    });
+    if (!user || !user.passwordHash || !verifyPassword(parsed.data.password, user.passwordHash)) {
+      return { error: "Invalid email or password" };
+    }
+    if (user.status === "BANNED" || user.status === "SUSPENDED") {
+      return { error: "Account locked. Contact support." };
+    }
 
-  await setSession(user.id);
-  redirect(user.role === "HELPER" ? "/helper/dashboard" : "/discover");
+    await setSession(user.id);
+    redirect(user.role === "HELPER" ? "/helper/dashboard" : "/discover");
+  } catch (e) {
+    // `redirect()` throws a special signal — let Next.js handle it.
+    if (e && typeof e === "object" && "digest" in e) throw e;
+    console.error("[loginAction]", e);
+    return {
+      error:
+        "Login service is unavailable — the database isn't configured on this deployment yet.",
+    };
+  }
 }
 
 // Register step 1: phone → OTP sent.
@@ -49,17 +59,22 @@ export async function sendOtpAction(_state: AuthState, formData: FormData): Prom
   const parsed = sendOtpSchema.safeParse({ phone: String(formData.get("phone") ?? "").trim() });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  const rl = await rateLimit(`otp:${parsed.data.phone}`, 3, 86400);
-  if (!rl.allowed) return { error: "OTP limit reached for this number today" };
+  try {
+    const rl = await rateLimit(`otp:${parsed.data.phone}`, 3, 86400);
+    if (!rl.allowed) return { error: "OTP limit reached for this number today" };
 
-  await sendOtp(parsed.data.phone);
-  return {
-    ok: true,
-    info:
-      process.env.DEV_OTP_BYPASS === "1" || process.env.DEV_OTP_BYPASS === "true"
-        ? "Dev mode: code is 000000"
-        : "Code sent to your phone",
-  };
+    await sendOtp(parsed.data.phone);
+    return {
+      ok: true,
+      info:
+        process.env.DEV_OTP_BYPASS === "1" || process.env.DEV_OTP_BYPASS === "true"
+          ? "Dev mode: code is 000000"
+          : "Code sent to your phone",
+    };
+  } catch (e) {
+    console.error("[sendOtpAction]", e);
+    return { error: "OTP service unavailable. Set TWILIO_* env vars or DEV_OTP_BYPASS=1." };
+  }
 }
 
 // Register step 2: phone + OTP + name + role + email + password → create user + session.
@@ -83,39 +98,47 @@ export async function registerAction(_state: AuthState, formData: FormData): Pro
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  const otp = await verifyOtp(parsed.data.phone, parsed.data.code);
-  if (!otp.ok) return { error: "Invalid OTP code" };
+  try {
+    const otp = await verifyOtp(parsed.data.phone, parsed.data.code);
+    if (!otp.ok) return { error: "Invalid OTP code" };
 
-  const existsPhone = await db.user.findUnique({ where: { phoneE164: parsed.data.phone } });
-  if (existsPhone) return { error: "Phone already registered" };
-  const existsEmail = await db.user.findUnique({ where: { email: parsed.data.email } });
-  if (existsEmail) return { error: "Email already registered" };
+    const existsPhone = await db.user.findUnique({ where: { phoneE164: parsed.data.phone } });
+    if (existsPhone) return { error: "Phone already registered" };
+    const existsEmail = await db.user.findUnique({ where: { email: parsed.data.email } });
+    if (existsEmail) return { error: "Email already registered" };
 
-  const user = await db.user.create({
-    data: {
-      phoneE164: parsed.data.phone,
-      email: parsed.data.email,
-      passwordHash: hashPassword(parsed.data.password),
-      role: parsed.data.role,
-      status: "PROBATION",
-      verifTier: "TIER_0_PHONE",
-      ...(parsed.data.role === "CLIENT"
-        ? { clientProfile: { create: { fullName: parsed.data.name } } }
-        : {
-            helperProfile: {
-              create: {
-                displayName: parsed.data.name,
-                serviceAreas: [],
-                photoUrls: [],
-                radiusKm: 15,
+    const user = await db.user.create({
+      data: {
+        phoneE164: parsed.data.phone,
+        email: parsed.data.email,
+        passwordHash: hashPassword(parsed.data.password),
+        role: parsed.data.role,
+        status: "PROBATION",
+        verifTier: "TIER_0_PHONE",
+        ...(parsed.data.role === "CLIENT"
+          ? { clientProfile: { create: { fullName: parsed.data.name } } }
+          : {
+              helperProfile: {
+                create: {
+                  displayName: parsed.data.name,
+                  serviceAreas: [],
+                  photoUrls: [],
+                  radiusKm: 15,
+                },
               },
-            },
-          }),
-    },
-  });
+            }),
+      },
+    });
 
-  await setSession(user.id);
-  redirect(user.role === "HELPER" ? "/helper/dashboard" : "/discover");
+    await setSession(user.id);
+    redirect(user.role === "HELPER" ? "/helper/dashboard" : "/discover");
+  } catch (e) {
+    if (e && typeof e === "object" && "digest" in e) throw e;
+    console.error("[registerAction]", e);
+    return {
+      error: "Registration service is unavailable — the database isn't configured yet.",
+    };
+  }
 }
 
 export async function logoutAction() {
